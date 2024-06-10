@@ -1,0 +1,60 @@
+import socket
+import threading
+import json
+import requests
+
+RESTAPIURL = "https://playgroundrepository20240610155728.azurewebsites.net/api/playground"
+
+def fetchplaygrounds():
+    try:
+        response = requests.get(RESTAPIURL)
+        response.raise_for_status()#raise_for_status() er en metode som vi kan bruge til at tjekke om der er sket en fejl i vores request, hvis der er sket en fejl vil den raise en exception, hvis der ikke er sket en fejl vil den ikke gøre noget
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching playgrounds: {e}")
+        return []
+
+  
+
+def handleclient(client_socket, playgrounds):
+    try:
+        # Modtag data fra klienten
+        data = client_socket.recv(1024).decode('utf-8') #grunden til at vi bruger 1024 er fordi det er en standard størrelse for en buffer, som betyder at vi kan modtage 1024 bytes af data, utf-8 er en encoding type som vi bruger til at konvertere dataen til en string så vi kan læse det som en string i python 
+        if not data:
+            return
+
+        # Konverter data til heltal
+        min_age = int(data)
+
+        # Find legepladser der opfylder minimumsalderen
+        eligible_playgrounds = [p for p in playgrounds if p["minAge"] <= min_age]
+
+        # Konverter resultatet til JSON
+        response = json.dumps(eligible_playgrounds)
+
+        # Send JSON-responsen tilbage til klienten
+        client_socket.send(response.encode('utf-8'))
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        client_socket.close()
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("localhost", 7531))
+    server.listen(5)
+    print("Server listening on port 7531")
+
+  # Hent legepladsobjekter fra REST API'en
+    playgrounds = fetchplaygrounds()  
+   
+   
+    # Modtag data fra klienten
+    while True:
+        client_socket, addr = server.accept()
+        print(f"Accepted connection from {addr}")
+        client_handler = threading.Thread(target=handleclient, args=(client_socket, playgrounds))
+        client_handler.start()
+
+if __name__ == "__main__":
+    main()
